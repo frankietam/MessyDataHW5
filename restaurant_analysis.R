@@ -32,16 +32,15 @@ all_data$INSPECTION.DATE <- NULL
 
 #(iii.)
 #Rename columns
-all_data <- rename(all_data,
-                   id = CAMIS,
-                   borough = BORO,
-                   cuisine = CUISINE.DESCRIPTION,
-                   action = ACTION, 
-                   code = VIOLATION.CODE,
-                   critical = CRITICAL.FLAG,
-                   score = SCORE, 
-                   grade = GRADE, 
-                   inspection_type = INSPECTION.TYPE)
+all_data <- rename(all_data, c('CAMIS' = 'id',
+                               'BORO' = 'borough',
+                               'CUISINE.DESCRIPTION' = 'cuisine',
+                               'ACTION' = 'action', 
+                               'VIOLATION.CODE' = 'code',
+                               'CRITICAL.FLAG' = 'critical',
+                               'SCORE' = 'score', 
+                               'GRADE' = 'grade', 
+                               'INSPECTION.TYPE' = 'inspection_type'))
 
 #Simplify ACTION column
 
@@ -118,16 +117,23 @@ restaurant_data <- all_data %>%
 
 #Part B(a.)
 restaurant_data <- restaurant_data %>% mutate(outcome = as.numeric(score >= 28))
+restaurant_data_cpoy <- restaurant_data #make a copy (cpoy is a typo! )
 
 #Part B(b.)
 # saving inspection date and score for Part b
-restaurant_data <- restaurant_data %>% select(-action, -code, -grade, -critical, -inspection_type)
+#restaurant_data <- restaurant_data %>% select(-action, -code, -grade, -critical, -inspection_type)
+restaurant_data <- restaurant_data %>% dplyr::select(borough, cuisine, outcome, inspection_year)
 
 #Part C(a.)
 restaurant_data <- mutate(restaurant_data, 
                           inspection_month = month(inspection_date),
                           inspection_day = weekdays(inspection_date),
                           initial = T)
+
+restaurant_data <- restaurant_data %>% ungroup()
+restaurant_data <- unique(restaurant_data)
+
+restaurant_data_copy_2 <- restaurant_data #copy 2
 
 #Part C(b.)
 #restrict to id, score, action, and inspection_date
@@ -141,38 +147,69 @@ features_data <- merge(all_data_restricted,
                        allow.cartesian = TRUE)
 
 
-#Part C(b.)(i.)
+#before 2017
+his_before_2017 <- stored_data_c %>% filter(grepl('Initial', inspection_type)) %>% filter(inspection_year < 2017)
 
-#Create a tibble of non-initial inspections for years before 2017
-historical <- left_join(all_data, restaurant_data) %>% 
-  filter(inspection_year <= 2017)
+his_before_2017 <- his_before_2017 %>% dplyr::select(id, inspection_date, score, borough, cuisine, inspection_year, action)
+his_before_2017 <- his_before_2017 %>% ungroup() %>% unique()
 
-historical$initial[is.na(historical$initial)] <- F
+his_before_2017 <- his_before_2017 %>% mutate(num_previous_low_inspections = as.numeric(his_before_2017$score < 14),
+                                              num_previous_med_inspections = as.numeric(his_before_2017$score >= 14 & his_before_2017$score < 28),
+                                              num_previous_high_inspections = as.numeric(his_before_2017$score >= 28))
+#'re-closed' and 'closed' in action column
+his_before_2017 <- his_before_2017 %>% mutate(num_previous_closings = as.numeric(grepl('closed', his_before_2017$action)))
+his_before_2017 <- his_before_2017 %>% group_by(id)  
 
+#need to  get row sum for 4 new feature columns --Ruoyu Dec.4
 
-historical <- mutate(historical,
-                     num_previous_low_inspections = NA)
-
-
-stored_non <- historical
-historical <- stored_non
-
-
-
-func <- function(i){
-  counter <- historical %>% 
-    group_by(id, inspection_date) %>% 
-    count(inspection_date < inspection_date[i])
-  
-  historical$num_previous_low_inspections[i] <-  counter
-}
-
-historical <- ifelse(historical$initial[i %in% 1:nrow(historical)] == T,
-                     yes = func(i),
-                     no=NA)
+# then use join function to join restaurant_data and his_before_2017 by id
 
 
+#Part D
+
+#only use 2015 and 2016 data for training set
+train.lr <- restaurant_data %>% filter(year==2015|year==2016)
+
+# use 2017 data for testing set
+test.lr <- restaurant_data %>% filter(year==2017)
+
+# train model with training set
+model.lr <- glm(outcome ~ cuisine + borough + inspection_month + inspection_day, data=train.lr, family = 'binomial')
+
+# examine model
+summary(model.lr)
+
+# generate predictions for testing set
+test.lr$predicted.probability <- predict(model.lr, newdata = test.lr, type='response') 
 
 
+# compute AUC using ROCR package
+test.pred.lr <- prediction(test.lr$predicted.probability, test.lr$outcome)
+test.pref.lr <- performance(test.pred.lr, "auc")
+cat('the auc score is ', 100*test.pref.lr@y.values[[1]], "\n") 
+
+#Part E
+
+#only use 2015 and 2016 data for training set
+train.rf <- restaurant_data %>% filter(year==2015|year==2016)
+
+# use 2017 data for testing set
+test.rf <- restaurant_data %>% filter(year==2017)
+
+# Create a Random Forest model with default parameters
+model.rf <- randomForest(outcome ~ cuisine + borough + inspection_month + inspection_day + 
+                           num_previous_low_inspections + num_previous_med_inspections + 
+                           num_previous_high_inspections + num_previous_closings, 
+                         data = train.rf, ntree = 1000, importance = TRUE)
+model.rf
+
+
+# testing set
+test.rf$predicted.probability <- predict(model, newdata = test.rf, type='prob') 
+
+# compute AUC using ROCR package
+testrf.pred <- prediction(test.rf$predicted.probability[,2], test.rf$outcome)
+testrf.perf <- performance(testrf.pred, "auc")
+cat('the auc score is ', 100*testrf.perf@y.values[[1]], "\n") 
 
 
