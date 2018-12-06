@@ -233,26 +233,27 @@ cat('the auc score is ', 100*testrf.perf@y.values[[1]], "\n")
 
 #Part F
 
-#Logistic regression
+# Plot data for Logistic regression
 
+# convert outcome (factor) to numeric requires special attention
 plot.data.lr <- test.lr %>% arrange(desc(predicted.probability)) %>% 
-  mutate(num_restaurant = row_number(), percent.precision = cumsum(as.numeric(outcome))/n()) %>% 
-  select(num_restaurant, percent.precision)
+  mutate(num_restaurant = row_number(), total_outcome = cumsum(as.numeric(outcome)-1), percent.precision = total_outcome/num_restaurant) %>% 
+  select(num_restaurant, total_outcome, percent.precision)
 
-#Randomforest
+# Plot data for Randomforest
 
 plot.data.rf <- test.rf %>% arrange(desc(predicted.probability)) %>% 
-  mutate(num_restaurant = row_number(), percent.precision = cumsum(as.numeric(outcome))/n()) %>% 
+  mutate(num_restaurant = row_number(), total_outcome = cumsum(as.numeric(outcome)-1), percent.precision = total_outcome/num_restaurant) %>% 
   select(num_restaurant, percent.precision)
 
+# only plot 100 to 2000
+plot.lr <- plot.data.lr[100:2000,]
+plot.rf <- plot.data.rf[100:2000,]
 
 theme_set(theme_bw())
-#p <- ggplot(data=plot.data, aes(x=num_restaurant, y=percent.precision)) 
 p <- ggplot()
-p <- p + geom_line(data=plot.data.lr, aes(x=num_restaurant, y=percent.precision, color='MS'))
-p <- p + geom_line(data=plot.data.rf, aes(x=num_restaurant, y=percent.precision, color='S'))
+p <- p + geom_line(data=plot.lr, aes(x=num_restaurant, y=percent.precision, color='MS'))
+p <- p + geom_line(data=plot.rf, aes(x=num_restaurant, y=percent.precision, color='S'))
 p <- p + scale_color_discrete(name = "Model", labels = c("Logistic Regression", "RandomForest"))
-# p <- p + scale_x_continuous('\nNumber of Restaurants', limits=c(100, 2000), breaks=c(100,200,500,1000,1500,2000), 
-#                             labels=c('100','200','500','1000','1500','2000'))
-# p <- p + scale_y_continuous("Percent of Initial Inspection is higher than 28", limits=c(0, 1), labels=scales::percent)
+p <- p + xlab("Num of restaurant") + ylab("Precision")
 p
