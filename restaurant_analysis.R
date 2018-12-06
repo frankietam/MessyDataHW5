@@ -255,5 +255,5 @@ p <- ggplot()
 p <- p + geom_line(data=plot.lr, aes(x=num_restaurant, y=percent.precision, color='MS'))
 p <- p + geom_line(data=plot.rf, aes(x=num_restaurant, y=percent.precision, color='S'))
 p <- p + scale_color_discrete(name = "Model", labels = c("Logistic Regression", "RandomForest"))
-p <- p + xlab("Num of restaurant") + ylab("Precision")
+p <- p + xlab("Num of highest ranked restaurants") + ylab("Precision")
 p
