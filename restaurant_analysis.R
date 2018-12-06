@@ -214,37 +214,45 @@ model.rf <- randomForest(outcome ~ cuisine + borough + inspection_month + inspec
 model.rf
 
 
+# # testing set
+# test.rf$predicted.probability <- predict(model.rf, newdata = test.rf, type='prob') 
+# 
+# # compute AUC using ROCR package
+# testrf.pred <- prediction(test.rf$predicted.probability[,2], test.rf$outcome)
+# testrf.perf <- performance(testrf.pred, "auc")
+# cat('the auc score is ', 100*testrf.perf@y.values[[1]], "\n") 
+
 # testing set
-test.rf$predicted.probability <- predict(model.rf, newdata = test.rf, type='prob') 
+test.rf$predicted.probability <- predict(model.rf, newdata = test.rf, type='prob')[,2]
 
 # compute AUC using ROCR package
-testrf.pred <- prediction(test.rf$predicted.probability[,2], test.rf$outcome)
+testrf.pred <- prediction(test.rf$predicted.probability, test.rf$outcome)
 testrf.perf <- performance(testrf.pred, "auc")
-cat('the auc score is ', 100*testrf.perf@y.values[[1]], "\n") 
+cat('the auc score is ', 100*testrf.perf@y.values[[1]], "\n")
 
 
 #Part F
 
 #Logistic regression
-test_test <- test.lr %>% arrange(desc(predicted.probability))
 
 plot.data.lr <- test.lr %>% arrange(desc(predicted.probability)) %>% 
   mutate(num_restaurant = row_number(), percent.precision = cumsum(as.numeric(outcome))/n()) %>% 
   select(num_restaurant, percent.precision)
 
 #Randomforest
-test_test_rf <- test.rf %>% arrange(desc(predicted.probability[,2]))
 
 plot.data.rf <- test.rf %>% arrange(desc(predicted.probability)) %>% 
-  mutate(numstops = row_number(), percent.recall = cumsum(found.contraband)/sum(found.contraband),
-         stops = numstops/n()) %>% select(stops, percent.recall)
+  mutate(num_restaurant = row_number(), percent.precision = cumsum(as.numeric(outcome))/n()) %>% 
+  select(num_restaurant, percent.precision)
+
 
 theme_set(theme_bw())
 #p <- ggplot(data=plot.data, aes(x=num_restaurant, y=percent.precision)) 
 p <- ggplot()
-p <- p + geom_line(data=plot.data.lr, aes(x=num_restaurant, y=percent.precision))
-p <- p + geom_line(data=plot.data.lr, aes(x=num_restaurant, y=percent.precision))
-p <- p + scale_x_continuous('\nNumber of Restaurants', limits=c(100, 2000), breaks=c(100,200,500,1000,1500,2000), 
-                            labels=c('100','200','500','1000','1500','2000'))
-p <- p + scale_y_continuous("Percent of Initial Inspection is higher than 28", limits=c(0, 1), labels=scales::percent)
+p <- p + geom_line(data=plot.data.lr, aes(x=num_restaurant, y=percent.precision, color='MS'))
+p <- p + geom_line(data=plot.data.rf, aes(x=num_restaurant, y=percent.precision, color='S'))
+p <- p + scale_color_discrete(name = "Model", labels = c("Logistic Regression", "RandomForest"))
+# p <- p + scale_x_continuous('\nNumber of Restaurants', limits=c(100, 2000), breaks=c(100,200,500,1000,1500,2000), 
+#                             labels=c('100','200','500','1000','1500','2000'))
+# p <- p + scale_y_continuous("Percent of Initial Inspection is higher than 28", limits=c(0, 1), labels=scales::percent)
 p
